@@ -91,6 +91,44 @@
         cardsNewCanCompete = true;
     }
 
+    let buttonsNewName = "";
+    let buttonsNewPins = "";
+
+    function buttonsChangePins(name: string, pins: string) {
+        if (!testRoot) return;
+        testRoot.buttons[name] = pins
+            .split(",")
+            .map((pin) => parseInt(pin.trim()));
+
+        testRoot = testRoot;
+    }
+
+    function buttonsChangeName(oldName: string, newName: string) {
+        if (!testRoot) return;
+        testRoot.buttons[newName] = testRoot.buttons[oldName];
+        delete testRoot.buttons[oldName];
+        testRoot = testRoot;
+    }
+
+    function buttonsDelete(name: string) {
+        if (!testRoot) return;
+        delete testRoot.buttons[name];
+        testRoot = testRoot;
+    }
+
+    function buttonsAddNew() {
+        if (!testRoot) return;
+        if (buttonsNewName in testRoot.buttons) return;
+        if (buttonsNewName.trim() === "") return;
+
+        testRoot.buttons[buttonsNewName] = buttonsNewPins
+            .split(",")
+            .map((pin) => parseInt(pin.trim()));
+        testRoot = testRoot;
+        buttonsNewName = "";
+        buttonsNewPins = "";
+    }
+
     async function test() {
         console.log(testRoot);
     }
@@ -191,12 +229,53 @@
         </tr>
     </table>
 
-    {#each Object.entries(testRoot.buttons) as [name, pins]}
-        {name}: {pins.join(", ")}
-        <br />
-    {/each}
+    <table>
+        <tr>
+            <th>Name</th>
+            <th>Pins</th>
+            <th></th>
+        </tr>
 
-    <br />
+        {#each Object.entries(testRoot.buttons) as [name, pins]}
+            <tr>
+                <td>
+                    <input
+                        type="text"
+                        value={name}
+                        on:change={(event) =>
+                            buttonsChangeName(name, event.target.value)}
+                    />
+                </td>
+
+                <td>
+                    <input
+                        type="text"
+                        value={pins.join(",")}
+                        on:change={(event) =>
+                            buttonsChangePins(name, event.target.value)}
+                    />
+                </td>
+
+                <td>
+                    <button on:click={() => buttonsDelete(name)}>X</button>
+                </td>
+            </tr>
+        {/each}
+
+        <tr class="gray">
+            <td>
+                <input type="text" bind:value={buttonsNewName} />
+            </td>
+
+            <td>
+                <input type="text" bind:value={buttonsNewPins} />
+            </td>
+
+            <td>
+                <button on:click={buttonsAddNew}>+</button>
+            </td>
+        </tr>
+    </table>
 
     {#each testRoot.tests as test}
         {test.name}
