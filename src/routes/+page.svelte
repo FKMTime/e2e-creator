@@ -36,7 +36,7 @@
     <br />
 
     {#each testRoot.tests as test}
-        {test.name} <br />
+        {test.name}
         <ul>
             {#each test.steps as step}
                 <li>{step.type}</li>
