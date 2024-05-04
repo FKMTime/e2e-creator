@@ -1,6 +1,6 @@
 export interface TestsRoot {
     dumpStateAfterTest: boolean;
-    cards: Record<string, Card>;
+    cards: Record<number, Card>;
     buttons: Record<string, number[]>;
     tests: Test[];
 }
