@@ -32,31 +32,6 @@
     let cardsNewRegistrantId = 0;
     let cardsNewCanCompete = true;
 
-    function cardsChangeCanCompete(id: number) {
-        if (!testRoot) return;
-
-        testRoot.cards[id].canCompete = !testRoot.cards[id].canCompete;
-        testRoot = testRoot;
-    }
-
-    function cardsChangeRegistrantId(id: number, registrantId: number) {
-        if (!testRoot) return;
-        testRoot.cards[id].registrantId = registrantId;
-        testRoot = testRoot;
-    }
-
-    function cardsChangeWcaId(id: number, wcaId: string) {
-        if (!testRoot) return;
-        testRoot.cards[id].wcaId = wcaId;
-        testRoot = testRoot;
-    }
-
-    function cardsChangeName(id: number, name: string) {
-        if (!testRoot) return;
-        testRoot.cards[id].name = name;
-        testRoot = testRoot;
-    }
-
     function cardsDelete(id: number) {
         if (!testRoot) return;
         delete testRoot.cards[id];
@@ -150,54 +125,45 @@
             <th></th>
         </tr>
 
-        {#each Object.entries(testRoot.cards) as [id, card]}
+        {#each Object.entries(testRoot.cards) as [id, _]}
             <tr>
                 <td>
                     <input
                         type="number"
                         value={id}
                         on:change={(event) =>
-                            cardsChangeId(id, event.target.value)}
+                            cardsChangeId(
+                                parseInt(id),
+                                event.currentTarget.value,
+                            )}
                     />
                 </td>
 
                 <td>
-                    <input
-                        type="text"
-                        value={card.name}
-                        on:change={(event) =>
-                            cardsChangeName(id, event.target.value)}
-                    />
+                    <input type="text" bind:value={testRoot.cards[id].name} />
                 </td>
 
                 <td>
-                    <input
-                        type="text"
-                        value={card.wcaId}
-                        on:change={(event) =>
-                            cardsChangeWcaId(id, event.target.value)}
-                    />
+                    <input type="text" bind:value={testRoot.cards[id].name} />
                 </td>
 
                 <td>
                     <input
                         type="number"
-                        value={card.registrantId}
-                        on:change={(event) =>
-                            cardsChangeRegistrantId(id, event.target.value)}
+                        bind:value={testRoot.cards[id].registrantId}
                     />
                 </td>
 
                 <td>
                     <input
                         type="checkbox"
-                        checked={card.canCompete}
-                        on:change={() => cardsChangeCanCompete(id)}
+                        bind:checked={testRoot.cards[id].canCompete}
                     />
                 </td>
 
                 <td>
-                    <button on:click={() => cardsDelete(id)}>X</button>
+                    <button on:click={() => cardsDelete(parseInt(id))}>X</button
+                    >
                 </td>
             </tr>
         {/each}
@@ -243,7 +209,7 @@
                         type="text"
                         value={name}
                         on:change={(event) =>
-                            buttonsChangeName(name, event.target.value)}
+                            buttonsChangeName(name, event.currentTarget.value)}
                     />
                 </td>
 
@@ -252,7 +218,7 @@
                         type="text"
                         value={pins.join(",")}
                         on:change={(event) =>
-                            buttonsChangePins(name, event.target.value)}
+                            buttonsChangePins(name, event.currentTarget.value)}
                     />
                 </td>
 
@@ -282,8 +248,21 @@
         <ul>
             {#each test.steps as step}
                 <li>{step.type}</li>
-                {#if step.data}
-                    {JSON.stringify(step.data)}
+                {#if step.type == "ScanCard" || step.type == "Sleep" || step.type == "SolveTime"}
+                    <input type="number" bind:value={step.data} />
+                {:else if step.type == "Button"}
+                    <input type="text" bind:value={step.data.name} />
+                    <input type="number" bind:value={step.data.time} />
+                {:else if step.type == "DelegateResolve"}
+                    <input
+                        type="checkbox"
+                        bind:checked={step.data.shouldScanCards}
+                    />
+                    <input type="number" bind:value={step.data.penalty} />
+                    <input type="number" bind:value={step.data.value} />
+                {:else if step.type == "VerifySolveTime"}
+                    <input type="number" bind:value={step.data.time} />
+                    <input type="number" bind:value={step.data.penalty} />
                 {/if}
             {/each}
         </ul>
