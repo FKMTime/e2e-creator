@@ -320,10 +320,23 @@
             {#each test.steps as step, stepIdx}
                 <li>
                     {step.type}
-                    {#if step.type == "ScanCard" || step.type == "Sleep" || step.type == "SolveTime"}
+                    {#if step.type == "Sleep" || step.type == "SolveTime"}
                         <input type="number" bind:value={step.data} />
+                    {:else if step.type == "ScanCard"}
+                        <select bind:value={step.data}>
+                            {#each Object.keys(testRoot.cards) as cardId}
+                                <option value={parseInt(cardId)}>
+                                    {testRoot.cards[parseInt(cardId)].name} ({cardId})
+                                </option>
+                            {/each}
+                        </select>
                     {:else if step.type == "Button"}
-                        <input type="text" bind:value={step.data.name} />
+                        <select bind:value={step.data.name}>
+                            {#each Object.keys(testRoot.buttons) as buttonName}
+                                <option value={buttonName}>{buttonName}</option>
+                            {/each}
+                        </select>
+
                         <input type="number" bind:value={step.data.time} />
                     {:else if step.type == "DelegateResolve"}
                         <input
