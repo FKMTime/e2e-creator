@@ -1,5 +1,5 @@
 <script lang="ts">
-    import type { TestsRoot, Step } from "$lib/types";
+    import type { TestsRoot } from "$lib/types";
 
     let files: FileList | any;
     let testRoot: TestsRoot | null = null;
@@ -42,7 +42,7 @@
         if (!testRoot) return;
         let card = testRoot.cards[id];
         delete testRoot.cards[id];
-        testRoot.cards[newId] = card;
+        testRoot.cards[parseInt(newId)] = card;
         testRoot = testRoot;
     }
 
@@ -104,6 +104,59 @@
         buttonsNewPins = "";
     }
 
+    function deleteTestStep(testIdx: number, stepIdx: number) {
+        if (!testRoot) return;
+        testRoot.tests[testIdx].steps.splice(stepIdx, 1);
+        testRoot = testRoot;
+    }
+
+    function addNewTestStep(testIdx: number, type: string) {
+        if (!testRoot) return;
+
+        let step: any = { type };
+        switch (type) {
+            case "ScanCard":
+                step.data = null;
+                break;
+            case "Sleep":
+                step.data = null;
+            case "SolveTime":
+                step.data = null;
+                break;
+            case "Button":
+                step.data = { name: "", time: 50 };
+                break;
+            case "DelegateResolve":
+                step.data = { shouldScanCards: false, penalty: 0, value: 0 };
+                break;
+            case "DelegateResolve":
+                step.data = { shouldScanCards: false, penalty: 0, value: 0 };
+                break;
+            case "VerifySolveTime":
+                step.data = { time: null, penalty: 0 };
+                break;
+        }
+
+        testRoot.tests[testIdx].steps.push(step);
+        testRoot = testRoot;
+    }
+
+    function addNewTest(name: string) {
+        if (!testRoot) return;
+        testRoot.tests.push({
+            name,
+            sleepBetween: 500,
+            steps: [],
+        });
+        testRoot = testRoot;
+    }
+
+    function removeTest(testIdx: number) {
+        if (!testRoot) return;
+        testRoot.tests.splice(testIdx, 1);
+        testRoot = testRoot;
+    }
+
     async function test() {
         console.log(testRoot);
     }
@@ -140,24 +193,30 @@
                 </td>
 
                 <td>
-                    <input type="text" bind:value={testRoot.cards[id].name} />
+                    <input
+                        type="text"
+                        bind:value={testRoot.cards[parseInt(id)].name}
+                    />
                 </td>
 
                 <td>
-                    <input type="text" bind:value={testRoot.cards[id].name} />
+                    <input
+                        type="text"
+                        bind:value={testRoot.cards[parseInt(id)].name}
+                    />
                 </td>
 
                 <td>
                     <input
                         type="number"
-                        bind:value={testRoot.cards[id].registrantId}
+                        bind:value={testRoot.cards[parseInt(id)].registrantId}
                     />
                 </td>
 
                 <td>
                     <input
                         type="checkbox"
-                        bind:checked={testRoot.cards[id].canCompete}
+                        bind:checked={testRoot.cards[parseInt(id)].canCompete}
                     />
                 </td>
 
@@ -243,33 +302,73 @@
         </tr>
     </table>
 
-    {#each testRoot.tests as test}
-        {test.name}
+    {#each testRoot.tests as test, testIdx}
+        <label style="font-weight: bold;">
+            Test Name:
+            <input type="text" bind:value={test.name} />
+        </label>
+        <button on:click={() => removeTest(testIdx)}>X</button>
+
+        <br />
+
+        <label>
+            Sleep between steps (ms):
+            <input type="text" bind:value={test.sleepBetween} />
+        </label>
+
         <ul>
-            {#each test.steps as step}
-                <li>{step.type}</li>
-                {#if step.type == "ScanCard" || step.type == "Sleep" || step.type == "SolveTime"}
-                    <input type="number" bind:value={step.data} />
-                {:else if step.type == "Button"}
-                    <input type="text" bind:value={step.data.name} />
-                    <input type="number" bind:value={step.data.time} />
-                {:else if step.type == "DelegateResolve"}
-                    <input
-                        type="checkbox"
-                        bind:checked={step.data.shouldScanCards}
-                    />
-                    <input type="number" bind:value={step.data.penalty} />
-                    <input type="number" bind:value={step.data.value} />
-                {:else if step.type == "VerifySolveTime"}
-                    <input type="number" bind:value={step.data.time} />
-                    <input type="number" bind:value={step.data.penalty} />
-                {/if}
+            {#each test.steps as step, stepIdx}
+                <li>
+                    {step.type}
+                    {#if step.type == "ScanCard" || step.type == "Sleep" || step.type == "SolveTime"}
+                        <input type="number" bind:value={step.data} />
+                    {:else if step.type == "Button"}
+                        <input type="text" bind:value={step.data.name} />
+                        <input type="number" bind:value={step.data.time} />
+                    {:else if step.type == "DelegateResolve"}
+                        <input
+                            type="checkbox"
+                            bind:checked={step.data.shouldScanCards}
+                        />
+                        <input type="number" bind:value={step.data.penalty} />
+                        <input type="number" bind:value={step.data.value} />
+                    {:else if step.type == "VerifySolveTime"}
+                        <input type="number" bind:value={step.data.time} />
+                        <input type="number" bind:value={step.data.penalty} />
+                    {/if}
+
+                    <button on:click={() => deleteTestStep(testIdx, stepIdx)}
+                        >X</button
+                    >
+                </li>
             {/each}
         </ul>
 
+        <form
+            on:submit|preventDefault={(event) =>
+                addNewTestStep(testIdx, event.currentTarget[0].value)}
+        >
+            <select>
+                {#each ["ScanCard", "Sleep", "SolveTime", "Button", "DelegateResolve", "VerifySolveTime"] as stepType}
+                    <option value={stepType}>{stepType}</option>
+                {/each}
+            </select>
+
+            <button type="submit">+</button>
+        </form>
+
+        <br />
+        <br />
         <br />
     {/each}
 
+    <form
+        on:submit|preventDefault={(event) =>
+            addNewTest(event.currentTarget[0].value)}
+    >
+        <input type="text" />
+        <button type="submit">+</button>
+    </form>
     <button on:click={test}>Test</button>
 {/if}
 
