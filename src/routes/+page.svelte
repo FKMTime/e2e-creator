@@ -127,10 +127,7 @@
                 step.data = { name: "", time: 50 };
                 break;
             case "DelegateResolve":
-                step.data = { shouldScanCards: false, penalty: 0, value: 0 };
-                break;
-            case "DelegateResolve":
-                step.data = { shouldScanCards: false, penalty: 0, value: 0 };
+                step.data = { shouldScanCards: false, penalty: null, value: null };
                 break;
             case "VerifySolveTime":
                 step.data = { time: null, penalty: 0 };
@@ -157,8 +154,22 @@
         testRoot = testRoot;
     }
 
-    async function test() {
-        console.log(testRoot);
+    function replacer(key: any, value: any) {
+        // Filtering out properties
+        if (value === null) {
+            return undefined;
+        }
+        return value;
+    }
+
+    async function generate() {
+        let json = JSON.stringify(testRoot, replacer, 4);
+        let blob = new Blob([json], { type: "application/json" });
+        let url = URL.createObjectURL(blob);
+        let a = document.createElement("a");
+        a.href = url;
+        a.download = "tests.json";
+        a.click();
     }
 </script>
 
@@ -362,7 +373,7 @@
                 addNewTestStep(testIdx, event.currentTarget[0].value)}
         >
             <select>
-                {#each ["ScanCard", "Sleep", "SolveTime", "Button", "DelegateResolve", "VerifySolveTime"] as stepType}
+                {#each ["ScanCard", "ResetState", "Sleep", "SolveTime", "Button", "DelegateResolve", "VerifySolveTime", "Snapshot", "VerifyDelegateSent", "SolveTimeRng"] as stepType}
                     <option value={stepType}>{stepType}</option>
                 {/each}
             </select>
@@ -382,7 +393,8 @@
         <input type="text" />
         <button type="submit">+</button>
     </form>
-    <button on:click={test}>Test</button>
+
+    <button on:click={generate}>GENERATE & DOWNLOAD</button>
 {/if}
 
 <style>

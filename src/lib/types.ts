@@ -55,7 +55,7 @@ export interface ButtonStep {
 
 export interface DelegateResolveStep {
     type: "DelegateResolve";
-    data: { shouldScanCards: boolean; penalty: number; value: number };
+    data: { shouldScanCards: boolean; penalty?: number; value?: number };
 }
 
 export interface VerifySolveTimeStep {
