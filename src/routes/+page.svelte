@@ -1,12 +1,22 @@
 <script lang="ts">
     import type { TestsRoot } from "$lib/types";
+    import { onMount } from "svelte";
 
     let files: FileList | any;
     let testRoot: TestsRoot | null = null;
+    let isSaved = false;
 
     $: if (files) {
         handleFiles();
     }
+
+    $: if (testRoot) {
+        localStorage.setItem("save", JSON.stringify(testRoot));
+    }
+
+    onMount(() => {
+        isSaved = localStorage.getItem("save") != null;
+    });
 
     async function handleFiles() {
         if (!(files instanceof FileList)) return;
@@ -17,11 +27,20 @@
         testRoot = json;
     }
 
-    async function loadSample() {
+    async function load() {
         files = [];
-        let json: TestsRoot = await fetch("/tests-sample.json").then((res) =>
-            res.json(),
-        );
+        let json: TestsRoot | null = null;
+
+        if (isSaved) {
+            let saved = localStorage.getItem("save");
+            if (saved) {
+                json = JSON.parse(saved);
+            }
+        } else {
+            json = await fetch("/tests-sample.json").then(
+                (res) => res.json(),
+            );
+        }
 
         testRoot = json;
     }
@@ -127,7 +146,11 @@
                 step.data = { name: "", time: 50 };
                 break;
             case "DelegateResolve":
-                step.data = { shouldScanCards: false, penalty: null, value: null };
+                step.data = {
+                    shouldScanCards: false,
+                    penalty: null,
+                    value: null,
+                };
                 break;
             case "VerifySolveTime":
                 step.data = { time: null, penalty: 0 };
@@ -154,7 +177,7 @@
         testRoot = testRoot;
     }
 
-    function replacer(key: any, value: any) {
+    function replacer(_key: any, value: any) {
         // Filtering out properties
         if (value === null) {
             return undefined;
@@ -175,7 +198,7 @@
 
 {#if !files}
     <input bind:files type="file" accept=".json" />
-    <button on:click={loadSample}>Load sample</button>
+    <button on:click={load}>{isSaved ? "Load saved" : "Load sample"}</button>
 {/if}
 
 {#if testRoot}
