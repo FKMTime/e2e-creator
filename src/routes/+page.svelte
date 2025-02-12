@@ -1,5 +1,5 @@
 <script lang="ts">
-    import type { TestsRoot } from "$lib/types";
+    import type { Group, TestsRoot } from "$lib/types";
     import { onMount } from "svelte";
 
     let files: FileList | any;
@@ -27,22 +27,50 @@
         testRoot = json;
     }
 
-    async function load() {
+    async function loadSample() {
         files = [];
         let json: TestsRoot | null = null;
+        json = await fetch("/tests-sample.json").then((res) => res.json());
 
-        if (isSaved) {
-            let saved = localStorage.getItem("save");
-            if (saved) {
-                json = JSON.parse(saved);
-            }
-        } else {
-            json = await fetch("/tests-sample.json").then(
-                (res) => res.json(),
-            );
+        testRoot = json;
+    }
+
+    async function loadSaved() {
+        files = [];
+        let json: TestsRoot | null = null;
+        let saved = localStorage.getItem("save");
+        if (saved) {
+            json = JSON.parse(saved);
         }
 
         testRoot = json;
+    }
+
+    let groupNewId = "";
+    let groupNewUseInspection = true;
+    let groupNewSecondaryText = "";
+
+    function addGroup() {
+        if (!testRoot) return;
+        if (testRoot.groups.findIndex((x) => x.groupId == groupNewId) >= 0)
+            return;
+
+        testRoot.groups.push({
+            groupId: groupNewId,
+            useInspection: groupNewUseInspection,
+            secondaryText: groupNewSecondaryText,
+        });
+        testRoot.groups = testRoot.groups;
+
+        groupNewId = "";
+        groupNewUseInspection = true;
+        groupNewSecondaryText = "";
+    }
+
+    function deleteGroup(idx: number) {
+        if (!testRoot) return;
+        testRoot.groups.splice(idx, 1);
+        testRoot = testRoot;
     }
 
     let cardsNewId = 0;
@@ -50,6 +78,7 @@
     let cardsNewWcaId = "";
     let cardsNewRegistrantId = 0;
     let cardsNewCanCompete = true;
+    let cardsNewGroup = "";
 
     function cardsDelete(id: number) {
         if (!testRoot) return;
@@ -74,6 +103,7 @@
             wcaId: cardsNewWcaId,
             registrantId: cardsNewRegistrantId,
             canCompete: cardsNewCanCompete,
+            group: cardsNewGroup,
         };
 
         testRoot = testRoot;
@@ -83,17 +113,15 @@
         cardsNewWcaId = "";
         cardsNewRegistrantId = 0;
         cardsNewCanCompete = true;
+        cardsNewGroup = "";
     }
 
     let buttonsNewName = "";
-    let buttonsNewPins = "";
+    let buttonsNewPin = 0;
 
-    function buttonsChangePins(name: string, pins: string) {
+    function buttonsChangePin(name: string, pin: number) {
         if (!testRoot) return;
-        testRoot.buttons[name] = pins
-            .split(",")
-            .map((pin) => parseInt(pin.trim()));
-
+        testRoot.buttons[name] = pin;
         testRoot = testRoot;
     }
 
@@ -115,12 +143,10 @@
         if (buttonsNewName in testRoot.buttons) return;
         if (buttonsNewName.trim() === "") return;
 
-        testRoot.buttons[buttonsNewName] = buttonsNewPins
-            .split(",")
-            .map((pin) => parseInt(pin.trim()));
+        testRoot.buttons[buttonsNewName] = buttonsNewPin;
         testRoot = testRoot;
         buttonsNewName = "";
-        buttonsNewPins = "";
+        buttonsNewPin = 0;
     }
 
     function deleteTestStep(testIdx: number, stepIdx: number) {
@@ -198,10 +224,58 @@
 
 {#if !files}
     <input bind:files type="file" accept=".json" />
-    <button on:click={load}>{isSaved ? "Load saved" : "Load sample"}</button>
+    <button on:click={loadSample}>Load sample</button>
+    <button on:click={loadSaved} disabled={!isSaved}>Load saved</button>
 {/if}
 
 {#if testRoot}
+    <table>
+        <tr>
+            <th>Group ID</th>
+            <th>Use inspection</th>
+            <th>Secondary Text</th>
+            <th></th>
+        </tr>
+
+        {#each testRoot.groups as group, i}
+            <tr>
+                <td>
+                    <input type="text" bind:value={group.groupId} />
+                </td>
+
+                <td>
+                    <input type="checkbox" bind:checked={group.useInspection} />
+                </td>
+
+                <td>
+                    <input type="text" bind:value={group.secondaryText} />
+                </td>
+
+                <td>
+                    <button on:click={() => deleteGroup(i)}>X</button>
+                </td>
+            </tr>
+        {/each}
+
+        <tr class="gray">
+            <td>
+                <input type="text" bind:value={groupNewId} />
+            </td>
+
+            <td>
+                <input type="checkbox" bind:checked={groupNewUseInspection} />
+            </td>
+
+            <td>
+                <input type="text" bind:value={groupNewSecondaryText} />
+            </td>
+
+            <td>
+                <button on:click={addGroup}>+</button>
+            </td>
+        </tr>
+    </table>
+
     <table>
         <tr>
             <th>ID</th>
@@ -209,6 +283,7 @@
             <th>Wca ID</th>
             <th>Registrant ID</th>
             <th>Can Compete</th>
+            <th>Group</th>
             <th></th>
         </tr>
 
@@ -255,6 +330,16 @@
                 </td>
 
                 <td>
+                    <select bind:value={testRoot.cards[parseInt(id)].group}>
+                        {#each testRoot.groups as group}
+                            <option value={group.groupId}
+                                >{group.secondaryText}</option
+                            >
+                        {/each}
+                    </select>
+                </td>
+
+                <td>
                     <button on:click={() => cardsDelete(parseInt(id))}>X</button
                     >
                 </td>
@@ -283,6 +368,16 @@
             </td>
 
             <td>
+                <select bind:value={cardsNewGroup}>
+                    {#each testRoot.groups as group}
+                        <option value={group.groupId}
+                            >{group.secondaryText}</option
+                        >
+                    {/each}
+                </select>
+            </td>
+
+            <td>
                 <button on:click={cardsAddNew}>+</button>
             </td>
         </tr>
@@ -295,7 +390,7 @@
             <th></th>
         </tr>
 
-        {#each Object.entries(testRoot.buttons) as [name, pins]}
+        {#each Object.entries(testRoot.buttons) as [name, pin]}
             <tr>
                 <td>
                     <input
@@ -308,10 +403,13 @@
 
                 <td>
                     <input
-                        type="text"
-                        value={pins.join(",")}
+                        type="number"
+                        value={pin}
                         on:change={(event) =>
-                            buttonsChangePins(name, event.currentTarget.value)}
+                            buttonsChangePin(
+                                name,
+                                parseInt(event.currentTarget.value),
+                            )}
                     />
                 </td>
 
@@ -327,7 +425,7 @@
             </td>
 
             <td>
-                <input type="text" bind:value={buttonsNewPins} />
+                <input type="number" bind:value={buttonsNewPin} />
             </td>
 
             <td>

@@ -1,8 +1,15 @@
 export interface TestsRoot {
     dumpStateAfterTest: boolean;
+    groups: Group[];
     cards: Record<number, Card>;
-    buttons: Record<string, number[]>;
+    buttons: Record<string, number>;
     tests: Test[];
+}
+
+export interface Group {
+    groupId: string;
+    useInspection: bool;
+    secondaryText: string;
 }
 
 export interface Card {
@@ -10,6 +17,7 @@ export interface Card {
     name: string;
     registrantId: number;
     wcaId: string;
+    group: string;
 }
 
 export interface Test {
