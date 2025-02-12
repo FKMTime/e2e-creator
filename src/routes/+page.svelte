@@ -78,7 +78,7 @@
     let cardsNewWcaId = "";
     let cardsNewRegistrantId = 0;
     let cardsNewCanCompete = true;
-    let cardsNewGroup = "";
+    let cardsNewGroups: string[] = [];
 
     function cardsDelete(id: number) {
         if (!testRoot) return;
@@ -103,7 +103,7 @@
             wcaId: cardsNewWcaId,
             registrantId: cardsNewRegistrantId,
             canCompete: cardsNewCanCompete,
-            group: cardsNewGroup,
+            groups: cardsNewGroups,
         };
 
         testRoot = testRoot;
@@ -113,7 +113,7 @@
         cardsNewWcaId = "";
         cardsNewRegistrantId = 0;
         cardsNewCanCompete = true;
-        cardsNewGroup = "";
+        cardsNewGroup = [];
     }
 
     let buttonsNewName = "";
@@ -320,7 +320,7 @@
                         <th>WCA ID</th>
                         <th>Registrant ID</th>
                         <th>Can Compete</th>
-                        <th>Group</th>
+                        <th>Groups</th>
                         <th></th>
                     </tr>
                 </thead>
@@ -378,8 +378,9 @@
                             >
                             <td>
                                 <select
+                                    multiple
                                     bind:value={
-                                        testRoot.cards[parseInt(id)].group
+                                        testRoot.cards[parseInt(id)].groups
                                     }
                                     class="input-select"
                                 >
@@ -436,7 +437,8 @@
                         >
                         <td>
                             <select
-                                bind:value={cardsNewGroup}
+                                multiple
+                                bind:value={cardsNewGroups}
                                 class="input-select"
                             >
                                 {#each testRoot.groups as group}

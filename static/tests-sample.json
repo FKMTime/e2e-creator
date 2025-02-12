@@ -18,14 +18,14 @@
       "name": "Filip Sciurka",
       "wcaId": "FILSCI01",
       "canCompete": true,
-      "group": "333-r1"
+      "groups": ["333-r1"]
     },
     "69420": {
       "registrantId": 1,
       "name": "Filip Dziurka",
       "wcaId": "FILDZI01",
       "canCompete": true,
-      "group": "333-bf"
+      "groups": ["333-r1", "333-bf"]
     }
   },
   "buttons": {

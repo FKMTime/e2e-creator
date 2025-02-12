@@ -17,7 +17,7 @@ export interface Card {
     name: string;
     registrantId: number;
     wcaId: string;
-    group: string;
+    groups: string[];
 }
 
 export interface Test {
