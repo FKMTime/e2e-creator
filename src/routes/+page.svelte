@@ -5,6 +5,9 @@
     let files: FileList | any;
     let testRoot: TestsRoot | null = null;
     let isSaved = false;
+    let validationErrors: Record<string, string> = {};
+    let showModal = false;
+    let modalMessage = "";
 
     $: if (files) {
         handleFiles();
@@ -12,6 +15,7 @@
 
     $: if (testRoot) {
         localStorage.setItem("save", JSON.stringify(testRoot));
+        validateAllInputs();
     }
 
     onMount(() => {
@@ -230,7 +234,264 @@
         return value;
     }
 
+    function getValidationKey(...parts: (string | number)[]): string {
+        return parts.join("-");
+    }
+
+    // Validation functions
+    function validateString(value: string, allowEmpty = false): boolean {
+        return allowEmpty ? true : value.trim().length > 0;
+    }
+
+    function validateNumber(
+        value: string | number,
+        allowEmpty = false,
+    ): boolean {
+        if (
+            allowEmpty &&
+            (value === "" || value === null || value === undefined)
+        )
+            return true;
+        return !isNaN(Number(value));
+    }
+
+    function validateWcaId(_value: string): boolean {
+        return true;
+    }
+
+    function validateSnapshotValue(operation: string, value: string): boolean {
+        if (value === "") return true;
+        const lowercaseValue = value.toLowerCase();
+        switch (operation) {
+            case "is":
+                return ["some", "none"].includes(lowercaseValue);
+            case "==":
+            case "!=":
+                return (
+                    ["true", "false"].includes(lowercaseValue) ||
+                    !isNaN(Number(value))
+                );
+            case "<":
+            case ">":
+                return !isNaN(Number(value));
+            default:
+                return false;
+        }
+    }
+
+    // Validate an input and update errors
+    function validateInput(
+        key: string,
+        value: any,
+        validator: (v: any) => boolean,
+    ) {
+        if (validator(value)) {
+            delete validationErrors[key];
+        } else {
+            validationErrors[key] = "Invalid input";
+        }
+        validationErrors = validationErrors;
+    }
+
+    // Validate all inputs on load
+    function validateAllInputs() {
+        if (!testRoot) return;
+
+        // Groups
+        testRoot.groups.forEach((group, i) => {
+            validateInput(
+                getValidationKey("group", i, "id"),
+                group.groupId,
+                validateString,
+            );
+            validateInput(
+                getValidationKey("group", i, "text"),
+                group.secondaryText,
+                (v) => validateString(v, true),
+            );
+        });
+
+        // Cards
+        Object.entries(testRoot.cards).forEach(([id, card]) => {
+            validateInput(
+                getValidationKey("card", id, "id"),
+                id,
+                validateNumber,
+            );
+            validateInput(
+                getValidationKey("card", id, "name"),
+                card.name,
+                validateString,
+            );
+            validateInput(
+                getValidationKey("card", id, "wca"),
+                card.wcaId,
+                validateWcaId,
+            );
+            validateInput(
+                getValidationKey("card", id, "regId"),
+                card.registrantId,
+                validateNumber,
+            );
+        });
+
+        // Buttons
+        Object.entries(testRoot.buttons).forEach(([name, pin]) => {
+            validateInput(
+                getValidationKey("button", name, "name"),
+                name,
+                validateString,
+            );
+            validateInput(
+                getValidationKey("button", name, "pin"),
+                pin,
+                validateNumber,
+            );
+        });
+
+        // Tests
+        testRoot.tests.forEach((test, testIdx) => {
+            validateInput(
+                getValidationKey("test", testIdx, "name"),
+                test.name,
+                validateString,
+            );
+            validateInput(
+                getValidationKey("test", testIdx, "sleep"),
+                test.sleepBetween,
+                validateNumber,
+            );
+            test.steps.forEach((step, stepIdx) => {
+                if (step.type === "Sleep") {
+                    validateInput(
+                        getValidationKey("test", testIdx, stepIdx, "sleep"),
+                        step.data,
+                        validateNumber,
+                    );
+                } else if (step.type === "Button") {
+                    validateInput(
+                        getValidationKey(
+                            "test",
+                            testIdx,
+                            stepIdx,
+                            "button-time",
+                        ),
+                        step.data.time,
+                        validateNumber,
+                    );
+                } else if (step.type === "DelegateResolve") {
+                    validateInput(
+                        getValidationKey(
+                            "test",
+                            testIdx,
+                            stepIdx,
+                            "delegate-penalty",
+                        ),
+                        step.data.penalty,
+                        (v) => validateNumber(v, true),
+                    );
+                    validateInput(
+                        getValidationKey(
+                            "test",
+                            testIdx,
+                            stepIdx,
+                            "delegate-value",
+                        ),
+                        step.data.value,
+                        (v) => validateNumber(v, true),
+                    );
+                } else if (step.type === "VerifySend") {
+                    validateInput(
+                        getValidationKey(
+                            "test",
+                            testIdx,
+                            stepIdx,
+                            "verify-time",
+                        ),
+                        step.data.time,
+                        (v) => validateNumber(v, true),
+                    );
+                    validateInput(
+                        getValidationKey(
+                            "test",
+                            testIdx,
+                            stepIdx,
+                            "verify-penalty",
+                        ),
+                        step.data.penalty,
+                        (v) => validateNumber(v, true),
+                    );
+                } else if (step.type === "VerifySnapshot") {
+                    step.data.forEach((query: any, queryIdx: any) => {
+                        const [key, operation, value] = query.split(" ");
+                        validateInput(
+                            getValidationKey(
+                                "test",
+                                testIdx,
+                                stepIdx,
+                                queryIdx,
+                                "snapshot-value",
+                            ),
+                            value || "",
+                            (v) => validateSnapshotValue(operation || "is", v),
+                        );
+                    });
+                }
+            });
+        });
+    }
+
+    // Check if there are any validation errors
+    function hasValidationErrors(): boolean {
+        return Object.keys(validationErrors).length > 0;
+    }
+
     async function generate() {
+        if (hasValidationErrors()) {
+            const errorMessages: any[] = [];
+            Object.keys(validationErrors).forEach((key) => {
+                const parts = key.split("-");
+                if (parts[0] === "test") {
+                    const testIdx = parseInt(parts[1]);
+                    const testName =
+                        testRoot?.tests[testIdx]?.name || `Test ${testIdx}`;
+                    if (parts.length === 3) {
+                        errorMessages.push(
+                            `Test "${testName}": Invalid name or sleep value`,
+                        );
+                    } else if (parts[2] === "sleep") {
+                        errorMessages.push(
+                            `Test "${testName}": Invalid sleep value`,
+                        );
+                    } else {
+                        const stepIdx = parseInt(parts[2]);
+                        const stepType =
+                            testRoot?.tests[testIdx]?.steps[stepIdx]?.type ||
+                            "Unknown";
+                        if (parts[3] === "snapshot-value") {
+                            const queryIdx = parseInt(parts[3]);
+                            errorMessages.push(
+                                `Test "${testName}", Step ${stepIdx + 1} (VerifySnapshot), Query ${queryIdx + 1}: Invalid value`,
+                            );
+                        } else {
+                            errorMessages.push(
+                                `Test "${testName}", Step ${stepIdx + 1} (${stepType}): Invalid input`,
+                            );
+                        }
+                    }
+                } else {
+                    errorMessages.push(
+                        `Section "${parts[0]}": Invalid input at ${key}`,
+                    );
+                }
+            });
+            modalMessage =
+                "Cannot generate JSON due to validation errors:\n" +
+                errorMessages.join("\n");
+            showModal = true;
+            return;
+        }
+
         let json = JSON.stringify(testRoot, replacer, 4);
         let blob = new Blob([json], { type: "application/json" });
         let url = URL.createObjectURL(blob);
@@ -239,26 +500,38 @@
         a.download = "tests.json";
         a.click();
     }
+
+    // Close modal
+    function closeModal() {
+        showModal = false;
+    }
 </script>
 
 {#if !files}
     <div class="file-upload">
         <label class="compact-label"
             ><span>File:</span>
-            <input
-                bind:files
-                type="file"
-                accept=".json"
-                class="file-input"
-                placeholder="Select JSON file"
-                title="Select JSON file"
-            />
+            <input bind:files type="file" accept=".json" class="file-input" />
         </label>
         <button on:click={loadSample} class="btn btn-sample">Load Sample</button
         >
         <button on:click={loadSaved} disabled={!isSaved} class="btn btn-saved"
             >Load Saved</button
         >
+    </div>
+{/if}
+
+{#if showModal}
+    <div class="modal-backdrop" on:click={closeModal}>
+        <div class="modal" on:click|stopPropagation>
+            <div class="modal-header">
+                <h3>Validation Errors</h3>
+                <button class="modal-close" on:click={closeModal}>X</button>
+            </div>
+            <div class="modal-body">
+                <pre>{modalMessage}</pre>
+            </div>
+        </div>
     </div>
 {/if}
 
@@ -285,8 +558,23 @@
                                             type="text"
                                             bind:value={group.groupId}
                                             class="input-text"
-                                            placeholder="e.g., A1"
-                                            title="e.g., A1"
+                                            class:input-error={validationErrors[
+                                                getValidationKey(
+                                                    "group",
+                                                    i,
+                                                    "id",
+                                                )
+                                            ]}
+                                            on:input={(e) =>
+                                                validateInput(
+                                                    getValidationKey(
+                                                        "group",
+                                                        i,
+                                                        "id",
+                                                    ),
+                                                    e.currentTarget.value,
+                                                    validateString,
+                                                )}
                                         /></label
                                     ></td
                                 >
@@ -296,7 +584,6 @@
                                             type="checkbox"
                                             bind:checked={group.useInspection}
                                             class="input-checkbox"
-                                            title="Use Inspection"
                                         /></label
                                     ></td
                                 >
@@ -306,8 +593,24 @@
                                             type="text"
                                             bind:value={group.secondaryText}
                                             class="input-text"
-                                            placeholder="e.g., Group Description"
-                                            title="e.g., Group Description"
+                                            class:input-error={validationErrors[
+                                                getValidationKey(
+                                                    "group",
+                                                    i,
+                                                    "text",
+                                                )
+                                            ]}
+                                            on:input={(e) =>
+                                                validateInput(
+                                                    getValidationKey(
+                                                        "group",
+                                                        i,
+                                                        "text",
+                                                    ),
+                                                    e.currentTarget.value,
+                                                    (v) =>
+                                                        validateString(v, true),
+                                                )}
                                         /></label
                                     ></td
                                 >
@@ -326,8 +629,15 @@
                                         type="text"
                                         bind:value={groupNewId}
                                         class="input-text"
-                                        placeholder="New Group ID"
-                                        title="New Group ID"
+                                        class:input-error={validationErrors[
+                                            "group-new-id"
+                                        ]}
+                                        on:input={(e) =>
+                                            validateInput(
+                                                "group-new-id",
+                                                e.currentTarget.value,
+                                                validateString,
+                                            )}
                                     /></label
                                 ></td
                             >
@@ -337,7 +647,6 @@
                                         type="checkbox"
                                         bind:checked={groupNewUseInspection}
                                         class="input-checkbox"
-                                        title="Use Inspection"
                                     /></label
                                 ></td
                             >
@@ -347,8 +656,15 @@
                                         type="text"
                                         bind:value={groupNewSecondaryText}
                                         class="input-text"
-                                        placeholder="New Secondary Text"
-                                        title="New Secondary Text"
+                                        class:input-error={validationErrors[
+                                            "group-new-text"
+                                        ]}
+                                        on:input={(e) =>
+                                            validateInput(
+                                                "group-new-text",
+                                                e.currentTarget.value,
+                                                (v) => validateString(v, true),
+                                            )}
                                     /></label
                                 ></td
                             >
@@ -386,14 +702,29 @@
                                         ><span>ID:</span><input
                                             type="number"
                                             value={id}
-                                            on:change={(event) =>
+                                            on:change={(e) =>
                                                 cardsChangeId(
                                                     parseInt(id),
-                                                    event.currentTarget.value,
+                                                    e.currentTarget.value,
                                                 )}
                                             class="input-number"
-                                            placeholder="Card ID"
-                                            title="Card ID"
+                                            class:input-error={validationErrors[
+                                                getValidationKey(
+                                                    "card",
+                                                    id,
+                                                    "id",
+                                                )
+                                            ]}
+                                            on:input={(e) =>
+                                                validateInput(
+                                                    getValidationKey(
+                                                        "card",
+                                                        id,
+                                                        "id",
+                                                    ),
+                                                    e.currentTarget.value,
+                                                    validateNumber,
+                                                )}
                                         /></label
                                     ></td
                                 >
@@ -406,8 +737,23 @@
                                                     .name
                                             }
                                             class="input-text"
-                                            placeholder="Competitor Name"
-                                            title="Competitor Name"
+                                            class:input-error={validationErrors[
+                                                getValidationKey(
+                                                    "card",
+                                                    id,
+                                                    "name",
+                                                )
+                                            ]}
+                                            on:input={(e) =>
+                                                validateInput(
+                                                    getValidationKey(
+                                                        "card",
+                                                        id,
+                                                        "name",
+                                                    ),
+                                                    e.currentTarget.value,
+                                                    validateString,
+                                                )}
                                         /></label
                                     ></td
                                 >
@@ -420,8 +766,23 @@
                                                     .wcaId
                                             }
                                             class="input-text"
-                                            placeholder="e.g., 2023SMIT01"
-                                            title="e.g., 2023SMIT01"
+                                            class:input-error={validationErrors[
+                                                getValidationKey(
+                                                    "card",
+                                                    id,
+                                                    "wca",
+                                                )
+                                            ]}
+                                            on:input={(e) =>
+                                                validateInput(
+                                                    getValidationKey(
+                                                        "card",
+                                                        id,
+                                                        "wca",
+                                                    ),
+                                                    e.currentTarget.value,
+                                                    validateWcaId,
+                                                )}
                                         /></label
                                     ></td
                                 >
@@ -434,8 +795,23 @@
                                                     .registrantId
                                             }
                                             class="input-number"
-                                            placeholder="Registrant Number"
-                                            title="Registrant Number"
+                                            class:input-error={validationErrors[
+                                                getValidationKey(
+                                                    "card",
+                                                    id,
+                                                    "regId",
+                                                )
+                                            ]}
+                                            on:input={(e) =>
+                                                validateInput(
+                                                    getValidationKey(
+                                                        "card",
+                                                        id,
+                                                        "regId",
+                                                    ),
+                                                    e.currentTarget.value,
+                                                    validateNumber,
+                                                )}
                                         /></label
                                     ></td
                                 >
@@ -448,7 +824,6 @@
                                                     .canCompete
                                             }
                                             class="input-checkbox"
-                                            title="Can Compete"
                                         /></label
                                     ></td
                                 >
@@ -462,7 +837,6 @@
                                                     .groups
                                             }
                                             class="input-select"
-                                            title="Select Groups"
                                         >
                                             {#each testRoot.groups as group}
                                                 <option value={group.groupId}
@@ -488,8 +862,15 @@
                                         type="number"
                                         bind:value={cardsNewId}
                                         class="input-number"
-                                        placeholder="New Card ID"
-                                        title="New Card ID"
+                                        class:input-error={validationErrors[
+                                            "card-new-id"
+                                        ]}
+                                        on:input={(e) =>
+                                            validateInput(
+                                                "card-new-id",
+                                                e.currentTarget.value,
+                                                validateNumber,
+                                            )}
                                     /></label
                                 ></td
                             >
@@ -499,8 +880,15 @@
                                         type="text"
                                         bind:value={cardsNewName}
                                         class="input-text"
-                                        placeholder="New Competitor Name"
-                                        title="New Competitor Name"
+                                        class:input-error={validationErrors[
+                                            "card-new-name"
+                                        ]}
+                                        on:input={(e) =>
+                                            validateInput(
+                                                "card-new-name",
+                                                e.currentTarget.value,
+                                                validateString,
+                                            )}
                                     /></label
                                 ></td
                             >
@@ -510,8 +898,15 @@
                                         type="text"
                                         bind:value={cardsNewWcaId}
                                         class="input-text"
-                                        placeholder="New WCA ID"
-                                        title="New WCA ID"
+                                        class:input-error={validationErrors[
+                                            "card-new-wca"
+                                        ]}
+                                        on:input={(e) =>
+                                            validateInput(
+                                                "card-new-wca",
+                                                e.currentTarget.value,
+                                                validateWcaId,
+                                            )}
                                     /></label
                                 ></td
                             >
@@ -521,8 +916,15 @@
                                         type="number"
                                         bind:value={cardsNewRegistrantId}
                                         class="input-number"
-                                        placeholder="New Registrant ID"
-                                        title="New Registrant ID"
+                                        class:input-error={validationErrors[
+                                            "card-new-regId"
+                                        ]}
+                                        on:input={(e) =>
+                                            validateInput(
+                                                "card-new-regId",
+                                                e.currentTarget.value,
+                                                validateNumber,
+                                            )}
                                     /></label
                                 ></td
                             >
@@ -532,7 +934,6 @@
                                         type="checkbox"
                                         bind:checked={cardsNewCanCompete}
                                         class="input-checkbox"
-                                        title="Can Compete"
                                     /></label
                                 ></td
                             >
@@ -543,7 +944,6 @@
                                         multiple
                                         bind:value={cardsNewGroups}
                                         class="input-select"
-                                        title="Select Groups"
                                     >
                                         {#each testRoot.groups as group}
                                             <option value={group.groupId}
@@ -584,14 +984,29 @@
                                         ><span>Name:</span><input
                                             type="text"
                                             value={name}
-                                            on:change={(event) =>
+                                            on:change={(e) =>
                                                 buttonsChangeName(
                                                     name,
-                                                    event.currentTarget.value,
+                                                    e.currentTarget.value,
                                                 )}
                                             class="input-text"
-                                            placeholder="Button Name"
-                                            title="Button Name"
+                                            class:input-error={validationErrors[
+                                                getValidationKey(
+                                                    "button",
+                                                    name,
+                                                    "name",
+                                                )
+                                            ]}
+                                            on:input={(e) =>
+                                                validateInput(
+                                                    getValidationKey(
+                                                        "button",
+                                                        name,
+                                                        "name",
+                                                    ),
+                                                    e.currentTarget.value,
+                                                    validateString,
+                                                )}
                                         /></label
                                     ></td
                                 >
@@ -600,17 +1015,31 @@
                                         ><span>Pin:</span><input
                                             type="number"
                                             value={pin}
-                                            on:change={(event) =>
+                                            on:change={(e) =>
                                                 buttonsChangePin(
                                                     name,
                                                     parseInt(
-                                                        event.currentTarget
-                                                            .value,
+                                                        e.currentTarget.value,
                                                     ),
                                                 )}
                                             class="input-number"
-                                            placeholder="Pin Number"
-                                            title="Pin Number"
+                                            class:input-error={validationErrors[
+                                                getValidationKey(
+                                                    "button",
+                                                    name,
+                                                    "pin",
+                                                )
+                                            ]}
+                                            on:input={(e) =>
+                                                validateInput(
+                                                    getValidationKey(
+                                                        "button",
+                                                        name,
+                                                        "pin",
+                                                    ),
+                                                    e.currentTarget.value,
+                                                    validateNumber,
+                                                )}
                                         /></label
                                     ></td
                                 >
@@ -629,8 +1058,15 @@
                                         type="text"
                                         bind:value={buttonsNewName}
                                         class="input-text"
-                                        placeholder="New Button Name"
-                                        title="New Button Name"
+                                        class:input-error={validationErrors[
+                                            "button-new-name"
+                                        ]}
+                                        on:input={(e) =>
+                                            validateInput(
+                                                "button-new-name",
+                                                e.currentTarget.value,
+                                                validateString,
+                                            )}
                                     /></label
                                 ></td
                             >
@@ -640,8 +1076,15 @@
                                         type="number"
                                         bind:value={buttonsNewPin}
                                         class="input-number"
-                                        placeholder="New Pin Number"
-                                        title="New Pin Number"
+                                        class:input-error={validationErrors[
+                                            "button-new-pin"
+                                        ]}
+                                        on:input={(e) =>
+                                            validateInput(
+                                                "button-new-pin",
+                                                e.currentTarget.value,
+                                                validateNumber,
+                                            )}
                                     /></label
                                 ></td
                             >
@@ -667,8 +1110,19 @@
                                 type="text"
                                 bind:value={test.name}
                                 class="input-text test-name"
-                                placeholder="Test Name"
-                                title="Test Name"
+                                class:input-error={validationErrors[
+                                    getValidationKey("test", testIdx, "name")
+                                ]}
+                                on:input={(e) =>
+                                    validateInput(
+                                        getValidationKey(
+                                            "test",
+                                            testIdx,
+                                            "name",
+                                        ),
+                                        e.currentTarget.value,
+                                        validateString,
+                                    )}
                             /></label
                         >
                         <button
@@ -682,8 +1136,19 @@
                                 type="number"
                                 bind:value={test.sleepBetween}
                                 class="input-number"
-                                placeholder="Milliseconds"
-                                title="Milliseconds"
+                                class:input-error={validationErrors[
+                                    getValidationKey("test", testIdx, "sleep")
+                                ]}
+                                on:input={(e) =>
+                                    validateInput(
+                                        getValidationKey(
+                                            "test",
+                                            testIdx,
+                                            "sleep",
+                                        ),
+                                        e.currentTarget.value,
+                                        validateNumber,
+                                    )}
                             /></label
                         >
                     </div>
@@ -698,8 +1163,25 @@
                                                 type="number"
                                                 bind:value={step.data}
                                                 class="input-number"
-                                                placeholder="Sleep Duration (ms)"
-                                                title="Sleep Duration (ms)"
+                                                class:input-error={validationErrors[
+                                                    getValidationKey(
+                                                        "test",
+                                                        testIdx,
+                                                        stepIdx,
+                                                        "sleep",
+                                                    )
+                                                ]}
+                                                on:input={(e) =>
+                                                    validateInput(
+                                                        getValidationKey(
+                                                            "test",
+                                                            testIdx,
+                                                            stepIdx,
+                                                            "sleep",
+                                                        ),
+                                                        e.currentTarget.value,
+                                                        validateNumber,
+                                                    )}
                                             /></label
                                         >
                                     {:else if step.type == "ScanCard"}
@@ -708,7 +1190,6 @@
                                             <select
                                                 bind:value={step.data}
                                                 class="input-select"
-                                                title="Select Card ID"
                                             >
                                                 {#each Object.keys(testRoot.cards) as cardId}
                                                     <option
@@ -727,7 +1208,6 @@
                                                 <select
                                                     bind:value={step.data.name}
                                                     class="input-select"
-                                                    title="Select Button Name"
                                                 >
                                                     {#each Object.keys(testRoot.buttons) as buttonName}
                                                         <option
@@ -742,8 +1222,26 @@
                                                     type="number"
                                                     bind:value={step.data.time}
                                                     class="input-number"
-                                                    placeholder="Press Time (ms)"
-                                                    title="Press Time (ms)"
+                                                    class:input-error={validationErrors[
+                                                        getValidationKey(
+                                                            "test",
+                                                            testIdx,
+                                                            stepIdx,
+                                                            "button-time",
+                                                        )
+                                                    ]}
+                                                    on:input={(e) =>
+                                                        validateInput(
+                                                            getValidationKey(
+                                                                "test",
+                                                                testIdx,
+                                                                stepIdx,
+                                                                "button-time",
+                                                            ),
+                                                            e.currentTarget
+                                                                .value,
+                                                            validateNumber,
+                                                        )}
                                                 /></label
                                             >
                                         </div>
@@ -757,7 +1255,6 @@
                                                             .shouldScanCards
                                                     }
                                                     class="input-checkbox"
-                                                    title="Should Scan Cards"
                                                 /></label
                                             >
                                             <label class="compact-label"
@@ -767,8 +1264,30 @@
                                                         step.data.penalty
                                                     }
                                                     class="input-number"
-                                                    placeholder="Penalty (optional)"
-                                                    title="Penalty (optional)"
+                                                    class:input-error={validationErrors[
+                                                        getValidationKey(
+                                                            "test",
+                                                            testIdx,
+                                                            stepIdx,
+                                                            "delegate-penalty",
+                                                        )
+                                                    ]}
+                                                    on:input={(e) =>
+                                                        validateInput(
+                                                            getValidationKey(
+                                                                "test",
+                                                                testIdx,
+                                                                stepIdx,
+                                                                "delegate-penalty",
+                                                            ),
+                                                            e.currentTarget
+                                                                .value,
+                                                            (v) =>
+                                                                validateNumber(
+                                                                    v,
+                                                                    true,
+                                                                ),
+                                                        )}
                                                 /></label
                                             >
                                             <label class="compact-label"
@@ -776,8 +1295,30 @@
                                                     type="number"
                                                     bind:value={step.data.value}
                                                     class="input-number"
-                                                    placeholder="Value (optional)"
-                                                    title="Value (optional)"
+                                                    class:input-error={validationErrors[
+                                                        getValidationKey(
+                                                            "test",
+                                                            testIdx,
+                                                            stepIdx,
+                                                            "delegate-value",
+                                                        )
+                                                    ]}
+                                                    on:input={(e) =>
+                                                        validateInput(
+                                                            getValidationKey(
+                                                                "test",
+                                                                testIdx,
+                                                                stepIdx,
+                                                                "delegate-value",
+                                                            ),
+                                                            e.currentTarget
+                                                                .value,
+                                                            (v) =>
+                                                                validateNumber(
+                                                                    v,
+                                                                    true,
+                                                                ),
+                                                        )}
                                                 /></label
                                             >
                                         </div>
@@ -788,8 +1329,30 @@
                                                     type="number"
                                                     bind:value={step.data.time}
                                                     class="input-number"
-                                                    placeholder="Time (optional)"
-                                                    title="Time (optional)"
+                                                    class:input-error={validationErrors[
+                                                        getValidationKey(
+                                                            "test",
+                                                            testIdx,
+                                                            stepIdx,
+                                                            "verify-time",
+                                                        )
+                                                    ]}
+                                                    on:input={(e) =>
+                                                        validateInput(
+                                                            getValidationKey(
+                                                                "test",
+                                                                testIdx,
+                                                                stepIdx,
+                                                                "verify-time",
+                                                            ),
+                                                            e.currentTarget
+                                                                .value,
+                                                            (v) =>
+                                                                validateNumber(
+                                                                    v,
+                                                                    true,
+                                                                ),
+                                                        )}
                                                 /></label
                                             >
                                             <label class="compact-label"
@@ -799,8 +1362,30 @@
                                                         step.data.penalty
                                                     }
                                                     class="input-number"
-                                                    placeholder="Penalty (optional)"
-                                                    title="Penalty (optional)"
+                                                    class:input-error={validationErrors[
+                                                        getValidationKey(
+                                                            "test",
+                                                            testIdx,
+                                                            stepIdx,
+                                                            "verify-penalty",
+                                                        )
+                                                    ]}
+                                                    on:input={(e) =>
+                                                        validateInput(
+                                                            getValidationKey(
+                                                                "test",
+                                                                testIdx,
+                                                                stepIdx,
+                                                                "verify-penalty",
+                                                            ),
+                                                            e.currentTarget
+                                                                .value,
+                                                            (v) =>
+                                                                validateNumber(
+                                                                    v,
+                                                                    true,
+                                                                ),
+                                                        )}
                                                 /></label
                                             >
                                             <label class="compact-label"
@@ -810,7 +1395,6 @@
                                                         step.data.delegate
                                                     }
                                                     class="input-checkbox"
-                                                    title="Delegate"
                                                 /></label
                                             >
                                         </div>
@@ -835,9 +1419,8 @@
                                                                 ] =
                                                                     `${e.currentTarget.value} ${operation || "is"} ${value || ""}`;
                                                                 testRoot =
-                                                                    testRoot; // Trigger reactivity
+                                                                    testRoot;
                                                             }}
-                                                            title="Select Key"
                                                         >
                                                             {#each ["scene", "inspection_time", "solve_time", "penalty", "time_confirmed", "possible_groups", "group_selected_idx", "current_competitor", "current_judge"] as keyOption}
                                                                 <option
@@ -854,14 +1437,32 @@
                                                             value={operation ||
                                                                 "is"}
                                                             on:change={(e) => {
+                                                                const newOperation =
+                                                                    e
+                                                                        .currentTarget
+                                                                        .value;
                                                                 step.data[
                                                                     queryIdx
                                                                 ] =
-                                                                    `${key || "solve_time"} ${e.currentTarget.value} ${value || ""}`;
+                                                                    `${key || "solve_time"} ${newOperation} ${value || ""}`;
+                                                                validateInput(
+                                                                    getValidationKey(
+                                                                        "test",
+                                                                        testIdx,
+                                                                        stepIdx,
+                                                                        queryIdx,
+                                                                        "snapshot-value",
+                                                                    ),
+                                                                    value || "",
+                                                                    (v) =>
+                                                                        validateSnapshotValue(
+                                                                            newOperation,
+                                                                            v,
+                                                                        ),
+                                                                );
                                                                 testRoot =
-                                                                    testRoot; // Trigger reactivity
+                                                                    testRoot;
                                                             }}
-                                                            title="Select Operation"
                                                         >
                                                             {#each ["<", ">", "==", "!=", "is"] as opOption}
                                                                 <option
@@ -877,15 +1478,42 @@
                                                             type="text"
                                                             value={value || ""}
                                                             class="input-text"
-                                                            placeholder="e.g., some"
-                                                            title="Value"
+                                                            class:input-error={validationErrors[
+                                                                getValidationKey(
+                                                                    "test",
+                                                                    testIdx,
+                                                                    stepIdx,
+                                                                    queryIdx,
+                                                                    "snapshot-value",
+                                                                )
+                                                            ]}
                                                             on:input={(e) => {
+                                                                const newValue =
+                                                                    e
+                                                                        .currentTarget
+                                                                        .value;
                                                                 step.data[
                                                                     queryIdx
                                                                 ] =
-                                                                    `${key || "solve_time"} ${operation || "is"} ${e.currentTarget.value}`;
+                                                                    `${key || "solve_time"} ${operation || "is"} ${newValue}`;
+                                                                validateInput(
+                                                                    getValidationKey(
+                                                                        "test",
+                                                                        testIdx,
+                                                                        stepIdx,
+                                                                        queryIdx,
+                                                                        "snapshot-value",
+                                                                    ),
+                                                                    newValue,
+                                                                    (v) =>
+                                                                        validateSnapshotValue(
+                                                                            operation ||
+                                                                                "is",
+                                                                            v,
+                                                                        ),
+                                                                );
                                                                 testRoot =
-                                                                    testRoot; // Trigger reactivity
+                                                                    testRoot;
                                                             }}
                                                         />
                                                     </label>
@@ -931,10 +1559,7 @@
                     >
                         <label class="compact-label"
                             ><span>Type:</span>
-                            <select
-                                class="input-select"
-                                title="Select Step Type"
-                            >
+                            <select class="input-select">
                                 {#each ["ScanCard", "ResetState", "Sleep", "SolveTime", "Button", "DelegateResolve", "VerifySend", "VerifySnapshot"] as stepType}
                                     <option value={stepType}>{stepType}</option>
                                 {/each}
@@ -953,8 +1578,13 @@
                     ><span>Name:</span><input
                         type="text"
                         class="input-text"
-                        placeholder="New Test Name"
-                        title="New Test Name"
+                        class:input-error={validationErrors["test-new-name"]}
+                        on:input={(e) =>
+                            validateInput(
+                                "test-new-name",
+                                e.currentTarget.value,
+                                validateString,
+                            )}
                     /></label
                 >
                 <button type="submit" class="btn btn-add">+</button>
@@ -1101,16 +1731,18 @@
         text-align: center;
     }
 
+    .input-error {
+        border: 2px solid #e74c3c !important; /* Red border for invalid inputs */
+    }
+
     .input-text,
     .input-number,
     .input-select {
         width: 100%;
-        padding: 8px 12px;
+        padding: 6px 10px;
+        font-size: 0.9rem;
         border: 1px solid #ddd;
         border-radius: 4px;
-        font-size: 0.9rem;
-        background: white;
-        transition: border-color 0.2s ease;
     }
 
     .input-text:focus,
@@ -1301,10 +1933,6 @@
         align-items: flex-start;
     }
 
-    .flex-grow {
-        flex-grow: 1;
-    }
-
     .step-form,
     .test-form {
         display: flex;
@@ -1333,6 +1961,71 @@
     .actions {
         text-align: right;
         padding: 20px 0;
+    }
+
+    .modal-backdrop {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.5);
+        backdrop-filter: blur(3px); /* Slight blur effect */
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 1000;
+    }
+
+    .modal {
+        background: white;
+        border-radius: 8px;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        max-width: 600px;
+        width: 90%;
+        max-height: 80vh;
+        overflow-y: auto;
+        padding: 20px;
+    }
+
+    .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-bottom: 1px solid #eee;
+        padding-bottom: 10px;
+        margin-bottom: 10px;
+    }
+
+    .modal-header h3 {
+        margin: 0;
+        font-size: 1.2rem;
+        color: #333;
+    }
+
+    .modal-close {
+        background: #e74c3c;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        width: 24px;
+        height: 24px;
+        font-size: 1rem;
+        cursor: pointer;
+        padding: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .modal-close:hover {
+        background: #c0392b;
+    }
+
+    .modal-body {
+        font-size: 0.9rem;
+        color: #666;
+        white-space: pre-wrap; /* Preserve newlines */
     }
 
     @media (max-width: 768px) {
