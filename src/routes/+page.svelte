@@ -817,17 +817,78 @@
                                     {:else if step.type == "VerifySnapshot"}
                                         <div class="snapshot-queries">
                                             {#each step.data as query, queryIdx}
-                                                <div class="form-row">
+                                                {@const [
+                                                    key,
+                                                    operation,
+                                                    value,
+                                                ] = query.split(" ")}
+                                                <div class="form-row query-row">
                                                     <label class="compact-label"
-                                                        ><span>Query:</span
-                                                        ><input
+                                                        ><span>Key:</span>
+                                                        <select
+                                                            class="input-select"
+                                                            value={key ||
+                                                                "solve_time"}
+                                                            on:change={(e) => {
+                                                                step.data[
+                                                                    queryIdx
+                                                                ] =
+                                                                    `${e.currentTarget.value} ${operation || "is"} ${value || ""}`;
+                                                                testRoot =
+                                                                    testRoot; // Trigger reactivity
+                                                            }}
+                                                            title="Select Key"
+                                                        >
+                                                            {#each ["scene", "inspection_time", "solve_time", "penalty", "time_confirmed", "possible_groups", "group_selected_idx", "current_competitor", "current_judge"] as keyOption}
+                                                                <option
+                                                                    value={keyOption}
+                                                                    >{keyOption}</option
+                                                                >
+                                                            {/each}
+                                                        </select>
+                                                    </label>
+                                                    <label class="compact-label"
+                                                        ><span>Op:</span>
+                                                        <select
+                                                            class="input-select"
+                                                            value={operation ||
+                                                                "is"}
+                                                            on:change={(e) => {
+                                                                step.data[
+                                                                    queryIdx
+                                                                ] =
+                                                                    `${key || "solve_time"} ${e.currentTarget.value} ${value || ""}`;
+                                                                testRoot =
+                                                                    testRoot; // Trigger reactivity
+                                                            }}
+                                                            title="Select Operation"
+                                                        >
+                                                            {#each ["<", ">", "==", "!=", "is"] as opOption}
+                                                                <option
+                                                                    value={opOption}
+                                                                    >{opOption}</option
+                                                                >
+                                                            {/each}
+                                                        </select>
+                                                    </label>
+                                                    <label class="compact-label"
+                                                        ><span>Value:</span>
+                                                        <input
                                                             type="text"
-                                                            bind:value={query}
-                                                            class="input-text flex-grow"
-                                                            placeholder="Snapshot Query"
-                                                            title="Snapshot Query"
-                                                        /></label
-                                                    >
+                                                            value={value || ""}
+                                                            class="input-text"
+                                                            placeholder="e.g., some"
+                                                            title="Value"
+                                                            on:input={(e) => {
+                                                                step.data[
+                                                                    queryIdx
+                                                                ] =
+                                                                    `${key || "solve_time"} ${operation || "is"} ${e.currentTarget.value}`;
+                                                                testRoot =
+                                                                    testRoot; // Trigger reactivity
+                                                            }}
+                                                        />
+                                                    </label>
                                                     <button
                                                         on:click={() =>
                                                             deleteSnapshotQuery(
@@ -1132,6 +1193,32 @@
 
     .btn-generate:hover {
         background-color: #138d75;
+    }
+
+    .query-row {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        width: 100%;
+    }
+
+    .query-row .compact-label {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .query-row .input-select,
+    .query-row .input-text {
+        width: 100%;
+        padding: 4px 8px;
+    }
+
+    .query-row .compact-label:nth-child(1) {
+        flex: 1.5;
+    }
+
+    .query-row .compact-label:nth-child(2) {
+        flex: 0.8;
     }
 
     .test {
