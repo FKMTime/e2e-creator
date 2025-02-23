@@ -36,23 +36,13 @@ export interface ScanCardStep {
     data: number;
 }
 
-export interface SnapshotStep {
-    type: "Snapshot";
-    data: null;
-}
-
 export interface ResetStateStep {
     type: "ResetState";
     data: null;
 }
 
-export interface SolveTimeStep {
-    type: "SolveTime";
-    data: number;
-}
-
 export interface SolveTimeRngStep {
-    type: "SolveTimeRng";
+    type: "SolveTime";
     data: null;
 }
 
@@ -66,14 +56,14 @@ export interface DelegateResolveStep {
     data: { shouldScanCards: boolean; penalty?: number; value?: number };
 }
 
-export interface VerifySolveTimeStep {
-    type: "VerifySolveTime";
-    data: { time?: number; penalty: number };
+export interface VerifySendStep {
+    type: "VerifySend";
+    data: { time?: number; penalty?: number, delegate: boolean };
 }
 
-export interface VerifyDelegateSentStep {
-    type: "VerifyDelegateSent";
-    data: null;
+export interface VerifySnapshotStep {
+    type: "VerifySnapshot";
+    data: string[];
 }
 
 export type Step =
@@ -82,8 +72,7 @@ export type Step =
     | SnapshotStep
     | ResetStateStep
     | SolveTimeStep
-    | SolveTimeRngStep
     | ButtonStep
     | DelegateResolveStep
-    | VerifySolveTimeStep
-    | VerifyDelegateSentStep;
+    | VerifySend
+    | VerifySnapshotStep;
